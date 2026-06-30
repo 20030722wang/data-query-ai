@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+
+# Virtual environment
+.venv/
+
+# IDE
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Environment (root only — docker/.env contains default ports, ok to commit)
+/.env
+
+# Docker model files (too large)
+*.bin
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db

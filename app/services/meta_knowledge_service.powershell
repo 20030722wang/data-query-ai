@@ -1,0 +1,2 @@
+cd D:\shangguigubeijing\workspace-python\dataquery-ai
+python -m app.scripts.build_meta_knowledge -c conf/meta_config.yml

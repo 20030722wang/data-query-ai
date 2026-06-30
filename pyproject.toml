@@ -1,0 +1,27 @@
+[project]
+name = "dataquery-ai"
+version = "0.1.0"
+description = "自然语言转 SQL 的智能数据查询助手，基于 LangGraph + FastAPI + Vue 3"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncmy>=0.2.11",
+    "cryptography>=48.0.0",
+    "elasticsearch[async]>=8,<9",
+    "fastapi[standard]>=0.136.3",
+    "jieba>=0.42.1",
+    "langchain>=1.3.1",
+    "langchain-huggingface>=1.2.2",
+    "langgraph>=1.2.1",
+    "loguru>=0.7.3",
+    "omegaconf>=2.3.0",
+    "pyyaml>=6.0.3",
+    "sentence-transformers>=3.0.0",
+    "qdrant-client>=1.18.0",
+    "sqlalchemy>=2.0.49",
+    "langchain-openai>=1.2.2",
+]
+
+# 国内用户可取消下面注释以加速下载：
+# [tool.uv]
+# index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
