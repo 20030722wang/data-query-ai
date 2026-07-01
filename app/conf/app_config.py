@@ -74,7 +74,10 @@ class AppConfig:
     llm: LLMConfig
 
 
-config_file = Path(__file__).parents[2] / 'conf' / 'app_config.yaml'
+import os
+
+_config_path = os.getenv("APP_CONFIG_PATH")
+config_file = Path(_config_path) if _config_path else (Path(__file__).parents[2] / 'conf' / 'app_config.yaml')
 context = OmegaConf.load(config_file)
 schema = OmegaConf.structured(AppConfig)
 app_config: AppConfig = OmegaConf.to_object(OmegaConf.merge(schema, context))

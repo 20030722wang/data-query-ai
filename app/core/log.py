@@ -1,14 +1,19 @@
-import asyncio
+"""Centralized logging configuration using Loguru.
+
+Logger configuration is deferred (call ``configure_logging()`` explicitly
+from the lifespan startup hook) to avoid import-time side effects.
+"""
+
 import sys
 from pathlib import Path
 
 from loguru import logger
 
-from app.conf.app_config import app_config
 from app.core.context import request_id_context_var
 
-# 配置日志格式
-log_format = (
+_logger_configured: bool = False
+
+LOG_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
     "<level>{level: <8}</level> | "
     "<magenta>request_id - {extra[request_id]}</magenta> | "
@@ -16,51 +21,44 @@ log_format = (
     "<level>{message}</level>"
 )
 
-# 注入request_id到日志记录中
-def inject_request_id(record):
+
+def inject_request_id(record: dict) -> bool:
+    """Patch log record to include the current request ID from context."""
     request_id = request_id_context_var.get("N/A")
     record["extra"]["request_id"] = request_id
+    return True
 
-logger.remove()
 
-# 给日志打补丁，使其支持注入request_id
-logger = logger.patch(inject_request_id)
-if app_config.logging.console.enable:
-    logger.add(sink=sys.stdout, level=app_config.logging.console.level, format=log_format)
-if app_config.logging.file.enable:
-    path = Path(app_config.logging.file.path)
-    path.mkdir(parents=True, exist_ok=True)
-    logger.add(
-        sink=path / "app.log",
-        level=app_config.logging.file.level,
-        format=log_format,
-        rotation=app_config.logging.file.rotation,
-        retention=app_config.logging.file.retention,
-        encoding="utf-8"
-    )
+def configure_logging(app_config) -> None:
+    """Idempotent logger setup — call once from the lifespan startup hook.
 
-if __name__ == '__main__':
-    async def graph(request: str):
-        # 打印日志
-        logger.info(request)
+    Args:
+        app_config: The AppConfig dataclass loaded from YAML.
+    """
+    global _logger_configured
+    if _logger_configured:
+        return
 
-    async def test1():
-        # 接收到请求
-        request_id_context_var.set("request-1")
+    logger.remove()
+    logger.patch(inject_request_id)
 
-        # 模拟处理
-        await asyncio.sleep(1)
-        await graph("request-1")
+    if app_config.logging.console.enable:
+        logger.add(
+            sink=sys.stdout,
+            level=app_config.logging.console.level,
+            format=LOG_FORMAT,
+        )
 
-    async def test2():
-        # 接收到请求
-        request_id_context_var.set("request-2")
+    if app_config.logging.file.enable:
+        path = Path(app_config.logging.file.path)
+        path.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            sink=path / "app.log",
+            level=app_config.logging.file.level,
+            format=LOG_FORMAT,
+            rotation=app_config.logging.file.rotation,
+            retention=app_config.logging.file.retention,
+            encoding="utf-8",
+        )
 
-        # 模拟处理
-        await asyncio.sleep(1)
-        await graph("request-2")
-
-    async def main():
-        await asyncio.gather(test1(), test2())
-
-    asyncio.run(main())
+    _logger_configured = True

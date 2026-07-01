@@ -1,7 +1,8 @@
+import os
 from pathlib import Path
 
-
-_PROMPTS_DIR = Path(__file__).parents[2] / 'prompts'
+_prompts_path = os.getenv("PROMPTS_PATH")
+_PROMPTS_DIR = Path(_prompts_path) if _prompts_path else (Path(__file__).parents[2] / 'prompts')
 
 
 def load_prompt(name: str) -> str:

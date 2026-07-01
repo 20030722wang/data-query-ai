@@ -51,3 +51,6 @@ class DataAgentState(TypedDict):
     sql: str # 生成的SQL
 
     error: str # 校验SQL时出现的错误信息
+
+    _correction_attempts: int   # 已校正次数（内部状态，最多3次）
+    _from_correction: bool       # 是否刚从校正节点返回

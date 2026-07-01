@@ -55,10 +55,25 @@ graph_builder.add_edge("filter_metric", "add_extra_context")
 graph_builder.add_edge("add_extra_context", "generate_sql")
 graph_builder.add_edge("generate_sql", "validate_sql")
 
-graph_builder.add_conditional_edges(source="validate_sql",
-                                    path= lambda state:"run_sql" if state['error'] is None else "correct_sql",
-                                    path_map={"run_sql": "run_sql", "correct_sql": "correct_sql"})
-graph_builder.add_edge("correct_sql", "run_sql")
+def _after_validate(state: DataAgentState) -> str:
+    """Route after SQL validation: execute, correct, or abort.
+
+    - error is None → execute directly
+    - correction attempts exhausted (≥3) → abort (END)
+    - otherwise → correct and re-validate
+    """
+    if state.get("error") is None:
+        return "run_sql"
+    if state.get("_correction_attempts", 0) >= 3:
+        return "__end__"  # abort after 3 correction failures
+    return "correct_sql"
+
+graph_builder.add_conditional_edges(
+    source="validate_sql",
+    path=_after_validate,
+    path_map={"run_sql": "run_sql", "correct_sql": "correct_sql", "__end__": END},
+)
+graph_builder.add_edge("correct_sql", "validate_sql")
 graph_builder.add_edge("run_sql", END)
 
 graph = graph_builder.compile()

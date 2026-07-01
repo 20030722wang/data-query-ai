@@ -1,56 +1,44 @@
-from langchain_core.output_parsers import JsonOutputParser
+"""Recall column metadata via hybrid keyword + vector search."""
+
 from langgraph.runtime import Runtime
-from langchain_core.prompts import PromptTemplate
+
 from app.agent.context import DataAgentContext
+from app.agent.nodes._recall_base import _expand_keywords, _search_with_batched_embeddings
 from app.agent.state import DataAgentState
-from app.entities.column_info import ColumnInfo
-from app.prompt.prompt_loader import load_prompt
-from app.agent.llm import llm
 from app.core.log import logger
 
 
+async def recall_column(
+    state: DataAgentState, runtime: Runtime[DataAgentContext],
+):
+    """Recall column metadata from Qdrant using LLM-expanded keywords.
 
-async def recall_column(state:DataAgentState,runtime:Runtime[DataAgentContext]):
+    Expands jieba keywords with the LLM, batches embedding calls, and
+    concurrently searches Qdrant for matching column definitions.
+    """
     writer = runtime.stream_writer
     step = "召回字段信息"
     writer({"type": "progress", "step": step, "status": "running"})
 
     try:
-        keywords = state["keywords"]
         query = state["query"]
-        column_qdrant_repository = runtime.context["column_qdrant_repository"]
-        embedding_client = runtime.context["embedding_client"]
+        jieba_keywords = state["keywords"]
+        qdr = runtime.context["column_qdrant_repository"]
+        emb = runtime.context["embedding_client"]
 
-        # 借助LLM扩展关键词
-        prompt = PromptTemplate(template=load_prompt("extend_keywords_for_column_recall"), input_variables=['query'])
-        output_parser = JsonOutputParser()
-        chain = prompt | llm | output_parser
+        llm_kws = await _expand_keywords(query, "extend_keywords_for_column_recall")
+        keywords = list(set(jieba_keywords + llm_kws))
 
-        result = await chain.ainvoke({"query": query})
+        col_map = await _search_with_batched_embeddings(
+            keywords,
+            embed_fn=lambda kws: emb.aembed_documents(kws),
+            search_fn=lambda vec: qdr.search(vec),
+            key_fn=lambda c: c.id,
+        )
 
-        if isinstance(result, list):
-            llm_keywords = result
-        elif isinstance(result, dict):
-            llm_keywords = list(result.values())[0] if result.values() else []
-        else:
-            llm_keywords = []
-
-        keywords = set(keywords + llm_keywords)
-
-        # 从Qdrant中检索字段信息
-        column_info_map: dict[str, ColumnInfo] = {}
-        for keyword in keywords:
-            # 对keyword进行Embedding
-            embedding = await embedding_client.aembed_query(keyword)
-            current_column_infos: list[ColumnInfo] = await column_qdrant_repository.search(embedding)
-            for column_info in current_column_infos:
-                if column_info.id not in column_info_map:
-                    column_info_map[column_info.id] = column_info
-        retrieved_column_infos: list[ColumnInfo] = list(column_info_map.values())
         writer({"type": "progress", "step": step, "status": "success"})
-
-        logger.info(f"检索到字段信息：{list(column_info_map.keys())}")
-        return {"retrieved_column_infos": retrieved_column_infos}
+        logger.info(f"检索到字段信息：{list(col_map.keys())}")
+        return {"retrieved_column_infos": list(col_map.values())}
     except Exception as e:
         logger.error(f"召回字段信息失败:{e}")
         writer({"type": "progress", "step": step, "status": "error"})
